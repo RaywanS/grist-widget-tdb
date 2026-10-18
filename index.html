@@ -1,334 +1,289 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-fr-scheme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tableau de bord SDPC</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.4/dist/dsfr.min.css">
 <style>
-* { box-sizing: border-box; }
-body { margin: 0; padding: 14px; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; font-size: 14px; color: #1f2933; background: #f4f6f8; }
-h1 { font-size: 20px; margin: 0 0 4px 0; }
-.sub { color: #52606d; margin-bottom: 12px; }
-#err { display: none; background: #fde8e8; border: 1px solid #e08a8a; color: #8a1c1c; padding: 10px 12px; border-radius: 6px; margin-bottom: 12px; white-space: pre-wrap; font-size: 13px; }
-.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #fff; border: 1px solid #d9e0e6; border-radius: 8px; padding: 10px; margin-bottom: 12px; }
-.filters input, .filters select { padding: 6px 8px; border: 1px solid #b8c4ce; border-radius: 5px; font-size: 13px; background: #fff; }
-.filters input { min-width: 180px; }
-.filters button { padding: 6px 12px; border: 1px solid #1d5f8a; background: #1d5f8a; color: #fff; border-radius: 5px; font-size: 13px; cursor: pointer; }
-.filters button:hover { background: #164a6b; }
-.filters button:focus, .filters input:focus, .filters select:focus { outline: 2px solid #f0a020; outline-offset: 1px; }
-.count { margin-left: auto; font-weight: 600; color: #1d5f8a; }
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
-.kpi { background: #fff; border: 1px solid #d9e0e6; border-radius: 8px; padding: 10px 12px; }
-.kpi .v { font-size: 26px; font-weight: 700; color: #1d5f8a; }
-.kpi .l { color: #52606d; font-size: 12px; }
-.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
-.box { background: #fff; border: 1px solid #d9e0e6; border-radius: 8px; padding: 10px 12px; min-width: 0; }
-.box h2 { font-size: 14px; margin: 0 0 8px 0; }
-.bar { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 13px; }
+body { margin: 0; padding: 16px; background: var(--background-alt-grey, #f6f6f6); }
+h1 { font-size: 1.5rem; margin: 0 0 .25rem 0; color: var(--text-title-blue-france, #000091); }
+#err { display: none; background: #ffe9e9; border-left: 4px solid #ce0500; color: #ce0500; padding: 10px 12px; margin-bottom: 12px; white-space: pre-wrap; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid #ddd; margin: 12px 0; }
+.tb { border: 1px solid #ddd; border-bottom: 0; background: #eee; padding: 8px 14px; cursor: pointer; font: inherit; color: #3a3a3a; }
+.tb.on { background: #fff; color: #000091; font-weight: 700; border-top: 2px solid #000091; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #fff; padding: 10px; margin-bottom: 12px; }
+.filters input, .filters select { width: auto; min-width: 150px; }
+.count { margin-left: auto; font-weight: 700; color: #000091; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.kpi { background: #fff; padding: 10px 12px; border-left: 4px solid #000091; }
+.kpi.w { border-left-color: #b34000; }
+.kpi .v { font-size: 1.8rem; font-weight: 700; color: #000091; line-height: 1.2; }
+.kpi .l { font-size: .8rem; color: #666; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.box { background: #fff; padding: 10px 12px; min-width: 0; margin-bottom: 12px; }
+.cols .box { margin-bottom: 0; }
+.box h2 { font-size: 1rem; margin: 0 0 8px 0; }
+.bar { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: .85rem; }
 .bar .n { width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bar .t { flex: 1; background: #e6ecf1; border-radius: 3px; height: 12px; }
-.bar .f { background: #1d5f8a; height: 12px; border-radius: 3px; }
-.bar .c { width: 34px; text-align: right; font-weight: 600; }
-.tw { max-height: 420px; overflow: auto; }
-table { border-collapse: collapse; width: 100%; font-size: 13px; }
-th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #e6ecf1; white-space: nowrap; }
-th { position: sticky; top: 0; background: #eef2f5; }
-.empty { color: #7b8794; font-style: italic; }
+.bar .t { flex: 1; background: #e5e5e5; height: 12px; }
+.bar .f { background: #000091; height: 12px; }
+.bar .c { width: 34px; text-align: right; font-weight: 700; }
+.tw { max-height: 360px; overflow: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .85rem; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #e5e5e5; white-space: nowrap; }
+th { position: sticky; top: 0; background: #f0f0f0; }
+.empty { color: #777; font-style: italic; }
+.note { font-size: .75rem; color: #666; margin-top: 4px; }
 </style>
 </head>
 <body>
-
 <h1>Tableau de bord SDPC</h1>
-<div class="sub">Suivi du portefeuille de produits numériques</div>
-
 <div id="err"></div>
-
+<div class="tabs" id="tabs"></div>
 <div class="filters">
-  <input type="text" id="f-q" placeholder="Rechercher un produit">
-  <select id="f-statut"></select>
-  <select id="f-dept"></select>
-  <select id="f-crit"></select>
-  <select id="f-strat"></select>
-  <button type="button" id="f-reset">Réinitialiser les filtres</button>
+  <input type="text" class="fr-input" id="f-q" placeholder="Rechercher un produit">
+  <select class="fr-select" id="f-statut"></select>
+  <select class="fr-select" id="f-dept"></select>
+  <select class="fr-select" id="f-crit"></select>
+  <select class="fr-select" id="f-strat"></select>
+  <button type="button" class="fr-btn fr-btn--secondary fr-btn--sm" id="f-reset">Réinitialiser</button>
   <span class="count" id="count">Chargement...</span>
 </div>
-
-<div class="kpis">
-  <div class="kpi"><div class="v" id="k-total">-</div><div class="l">Produits dans la sélection</div></div>
-  <div class="kpi"><div class="v" id="k-actifs">-</div><div class="l">Produits actifs</div></div>
-  <div class="kpi"><div class="v" id="k-strat">-</div><div class="l">Produits stratégiques</div></div>
-  <div class="kpi"><div class="v" id="k-crit">-</div><div class="l">Produits critiques ou essentiels</div></div>
-  <div class="kpi"><div class="v" id="k-compl">-</div><div class="l">Complétion moyenne</div></div>
-</div>
-
-<div class="cols">
-  <div class="box"><h2>Produits par statut actuel</h2><div id="chart-statut"></div></div>
-  <div class="box"><h2>Produits par département</h2><div id="chart-dept"></div></div>
-</div>
-
-<div class="box" style="margin-top:12px">
-  <h2>Liste des produits</h2>
-  <div class="tw"><table id="tbl"></table></div>
-</div>
+<div id="main"></div>
 
 <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
 <script>
-// ------------------------------------------------------------
-// Identifiants des colonnes Grist (modifiables ici uniquement)
-// ------------------------------------------------------------
 var COL = {
-  produit: "Produit",
-  statut: "Statut_actuel",
-  dept: "Departement_SDPC",
-  crit: "Criticite",
-  strat: "Produit_strategique",
-  compl: "Taux_de_completion"
+  produit: "Produit", statut: "Statut_actuel", dept: "Departement_SDPC", crit: "Criticite",
+  strat: "Produit_strategique", compl: "Taux_de_completion", maj: "Date_de_derniere_mise_a_jour",
+  majAlt: "Date_de_mise_a_jour", vides: "Nombre_de_champs_critiques_vides",
+  homol: "Statut_d_homologation_de_securite", homolFin: "Fin_de_validite_d_homologation",
+  rgaa: "RGAA_Taux_de_conformite", pca: "Inscription_au_PCA", obso: "Obsolescence",
+  c26: "Cible_RenovSI_2026", c27: "Cible_RenovSI_2027", e26: "RenovSI_2026_Etat",
+  pic: "tech_PIC_etat_de_la_migration",
+  vis: "Vision_strategie", usr: "Connaissance_utilisateurs_design",
+  imp: "Mesure_d_impact", del: "Delivery_iteration"
 };
+// Seuils modifiables
+var CFG = { complFaible: 50, rgaaSeuil: 75, joursMaj: 180, moisHomol: 6 };
 
-var ALL = [];
-var FILTERS = { q: "", statut: "", dept: "", crit: "", strat: "" };
+var TABS = [["overview", "Vue d'ensemble"], ["portfolio", "Portefeuille"], ["risks", "Risques & conformité"], ["modern", "Modernisation"], ["maturity", "Maturité & qualité"]];
+var ALL = [], F = { q: "", statut: "", dept: "", crit: "", strat: "" }, TAB = "overview", SC = 1, SR = 1;
 
-// ------------------------------------------------------------
-// Affichage des erreurs dans la page (pas d'écran blanc)
-// ------------------------------------------------------------
-function showError(msg) {
-  var el = document.getElementById("err");
-  el.style.display = "block";
-  el.textContent = "Erreur : " + msg;
-}
-window.onerror = function (message, source, line) {
-  showError(message + " (ligne " + line + ")");
-};
+function showError(m) { var e = document.getElementById("err"); e.style.display = "block"; e.textContent = "Erreur : " + m; }
+window.onerror = function (m, s, l) { showError(m + " (ligne " + l + ")"); };
 
-// ------------------------------------------------------------
-// Fonctions utilitaires
-// ------------------------------------------------------------
-function esc(s) {
-  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-// Transforme n'importe quelle valeur Grist en liste de textes.
-// Gère : vide, texte, tableau Grist ["L", "a", "b"], texte JSON "[...]".
+function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
 function toList(v) {
-  var out = [];
-  var i;
-  if (v === null || v === undefined || v === "") { return out; }
+  var o = [], i;
+  if (v === null || v === undefined || v === "") { return o; }
   if (Array.isArray(v)) {
-    for (i = 0; i < v.length; i++) {
-      if (i === 0 && v[i] === "L") { continue; }
-      if (v[i] !== null && v[i] !== undefined && v[i] !== "") { out.push(String(v[i])); }
-    }
-    return out;
+    for (i = 0; i < v.length; i++) { if (i === 0 && v[i] === "L") { continue; } if (v[i] !== null && v[i] !== undefined && v[i] !== "") { o.push(String(v[i])); } }
+    return o;
   }
-  if (typeof v === "string" && v.charAt(0) === "[") {
-    try {
-      return toList(JSON.parse(v));
-    } catch (e) {
-      return [v];
-    }
-  }
+  if (typeof v === "string" && v.charAt(0) === "[") { try { return toList(JSON.parse(v)); } catch (e) { return [v]; } }
   return [String(v)];
 }
-
-// Valeur texte simple (premier élément si liste)
-function toText(v) {
-  var l = toList(v);
-  return l.length > 0 ? l[0] : "";
-}
-
+function T(r, c) { var l = toList(r[c]); return l.length ? l[0] : ""; }
 function norm(s) {
-  return String(s).toLowerCase();
+  s = String(s).toLowerCase();
+  try { s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); } catch (e) {}
+  return s;
 }
+function has(r, c, word) { return norm(toList(r[c]).join(" ")).indexOf(word) !== -1; }
+function filled(r, c) { return toList(r[c]).length > 0; }
+function isNo(s) { s = norm(s); return s === "non" || s === "aucun" || s === "false" || s === "n/a"; }
+function yesList(r, c) { var l = toList(r[c]), i; for (i = 0; i < l.length; i++) { if (!isNo(l[i])) { return true; } } return false; }
 
-// ------------------------------------------------------------
-// Règles métier (à ajuster selon les vraies valeurs de vos listes)
-// ------------------------------------------------------------
-// Actif = statut renseigné et qui ne contient pas "décommission"
-function isActive(rec) {
-  var s = norm(toText(rec[COL.statut]));
-  if (s === "") { return false; }
-  return s.indexOf("commission") === -1;
+function toDate(v) {
+  var d, m;
+  if (v === null || v === undefined || v === "") { return null; }
+  if (v instanceof Date) { return isNaN(v.getTime()) ? null : v; }
+  if (typeof v === "number") { d = new Date(v < 100000000000 ? v * 1000 : v); return isNaN(d.getTime()) ? null : d; }
+  v = String(v).replace(/^\s+|\s+$/g, "");
+  m = v.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/);
+  if (m) { return new Date(+m[3], +m[2] - 1, +m[1]); }
+  d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
 }
+function fmtDate(d) { return d ? ("0" + d.getDate()).slice(-2) + "/" + ("0" + (d.getMonth() + 1)).slice(-2) + "/" + d.getFullYear() : ""; }
+function majDate(r) { return toDate(r[COL.maj]) || toDate(r[COL.majAlt]); }
+function pct(r, c, sc) { return typeof r[c] === "number" ? Math.round(r[c] * sc) : null; }
+function scaleOf(c) { var i, mx = 0; for (i = 0; i < ALL.length; i++) { if (typeof ALL[i][c] === "number" && ALL[i][c] > mx) { mx = ALL[i][c]; } } return (mx > 0 && mx <= 1) ? 100 : 1; }
 
-// Stratégique = au moins une valeur différente de non / aucun
-function isStrategic(rec) {
-  var l = toList(rec[COL.strat]);
-  var i, s;
-  for (i = 0; i < l.length; i++) {
-    s = norm(l[i]);
-    if (s !== "non" && s !== "aucun" && s !== "false") { return true; }
-  }
-  return false;
+// Règles métier (à ajuster selon vos valeurs)
+function isActive(r) { var s = norm(T(r, COL.statut)); return s !== "" && s.indexOf("decommission") === -1; }
+function isStrat(r) { return yesList(r, COL.strat); }
+function isCrit(r) { var s = norm(T(r, COL.crit)); if (s.indexOf("non") === 0) { return false; } return s.indexOf("critique") !== -1 || s.indexOf("essentiel") !== -1; }
+function isObso(r) { return yesList(r, COL.obso) || norm(T(r, COL.statut)).indexOf("decommission") !== -1; }
+function homolOk(r) { var s = norm(T(r, COL.homol)); return s.indexOf("homolog") !== -1 && s.indexOf("en cours") === -1 && s.indexOf("non") !== 0; }
+function homolEnCours(r) { return norm(T(r, COL.homol)).indexOf("en cours") !== -1; }
+function homolBientot(r) {
+  var d = toDate(r[COL.homolFin]), now = new Date(), lim = new Date();
+  lim.setMonth(lim.getMonth() + CFG.moisHomol);
+  return d !== null && d <= lim;
 }
-
-// Critique ou essentiel (en excluant "non critique")
-function isCritical(rec) {
-  var s = norm(toText(rec[COL.crit]));
-  if (s.indexOf("non") === 0) { return false; }
-  return s.indexOf("critique") !== -1 || s.indexOf("essentiel") !== -1;
+function noPca(r) { return isCrit(r) && norm(T(r, COL.pca)).indexOf("oui") === -1; }
+function rgaaBas(r) { var p = pct(r, COL.rgaa, SR); return p !== null && p < CFG.rgaaSeuil; }
+function complBas(r) { var p = pct(r, COL.compl, SC); return p !== null && p < CFG.complFaible; }
+function vieux(r) { var d = majDate(r); return d === null || ((new Date()) - d) / 86400000 > CFG.joursMaj; }
+function videsCrit(r) { return typeof r[COL.vides] === "number" && r[COL.vides] > 0; }
+function statutIs(r, w) {
+  var s = norm(T(r, COL.statut));
+  if (w === "adecom") { return s.indexOf("decommissionner") !== -1; }
+  if (w === "decom") { return s.indexOf("decommission") !== -1 && s.indexOf("decommissionner") === -1; }
+  return s.indexOf(w) !== -1;
 }
+function cible26(r) { return yesList(r, COL.c26); }
+function cible27(r) { return yesList(r, COL.c27); }
+function sansTraj(r) { return !cible26(r) && !cible27(r); }
+function migFaite(r) { var s = norm(T(r, COL.e26)); return s.indexOf("effectu") !== -1 || s.indexOf("termin") !== -1 || s.indexOf("realis") !== -1; }
+function migEnCours(r) { return norm(T(r, COL.e26)).indexOf("en cours") !== -1; }
+var DIMS = [["Vision & stratégie", "vis"], ["Connaissance utilisateurs & design", "usr"], ["Mesure d'impact", "imp"], ["Delivery & itération", "del"]];
+function matInc(r) { var i; for (i = 0; i < DIMS.length; i++) { if (!filled(r, COL[DIMS[i][1]])) { return true; } } return false; }
 
-// ------------------------------------------------------------
-// Filtres
-// ------------------------------------------------------------
-function passFilters(rec) {
-  var name = norm(toText(rec[COL.produit]));
-  if (FILTERS.q !== "" && name.indexOf(norm(FILTERS.q)) === -1) { return false; }
-  if (FILTERS.statut !== "" && toText(rec[COL.statut]) !== FILTERS.statut) { return false; }
-  if (FILTERS.dept !== "" && toText(rec[COL.dept]) !== FILTERS.dept) { return false; }
-  if (FILTERS.crit !== "" && toText(rec[COL.crit]) !== FILTERS.crit) { return false; }
-  if (FILTERS.strat === "oui" && !isStrategic(rec)) { return false; }
-  if (FILTERS.strat === "non" && isStrategic(rec)) { return false; }
+function passF(r) {
+  if (F.q !== "" && norm(T(r, COL.produit)).indexOf(norm(F.q)) === -1) { return false; }
+  if (F.statut !== "" && T(r, COL.statut) !== F.statut) { return false; }
+  if (F.dept !== "" && T(r, COL.dept) !== F.dept) { return false; }
+  if (F.crit !== "" && T(r, COL.crit) !== F.crit) { return false; }
+  if (F.strat === "oui" && !isStrat(r)) { return false; }
+  if (F.strat === "non" && isStrat(r)) { return false; }
   return true;
 }
 
-function uniqueValues(col) {
-  var seen = {};
-  var out = [];
-  var i, t;
-  for (i = 0; i < ALL.length; i++) {
-    t = toText(ALL[i][col]);
-    if (t !== "" && !seen[t]) { seen[t] = true; out.push(t); }
-  }
-  out.sort();
-  return out;
+// Briques d'affichage
+function cnt(rows, fn) { var n = 0, i; for (i = 0; i < rows.length; i++) { if (fn(rows[i])) { n++; } } return n; }
+function kpis(items) {
+  var h = '<div class="kpis">', i;
+  for (i = 0; i < items.length; i++) { h += '<div class="kpi' + (items[i][2] ? " w" : "") + '"><div class="v">' + items[i][1] + '</div><div class="l">' + esc(items[i][0]) + '</div></div>'; }
+  return h + "</div>";
 }
-
-function fillSelect(id, label, values, current) {
-  var el = document.getElementById(id);
-  var html = '<option value="">' + esc(label) + '</option>';
-  var i, sel;
-  for (i = 0; i < values.length; i++) {
-    sel = values[i] === current ? " selected" : "";
-    html += '<option value="' + esc(values[i]) + '"' + sel + '>' + esc(values[i]) + '</option>';
-  }
-  el.innerHTML = html;
-}
-
-function buildSelects() {
-  fillSelect("f-statut", "Tous les statuts", uniqueValues(COL.statut), FILTERS.statut);
-  fillSelect("f-dept", "Tous les départements", uniqueValues(COL.dept), FILTERS.dept);
-  fillSelect("f-crit", "Toutes les criticités", uniqueValues(COL.crit), FILTERS.crit);
-  var el = document.getElementById("f-strat");
-  el.innerHTML = '<option value="">Stratégique : tous</option>' +
-    '<option value="oui"' + (FILTERS.strat === "oui" ? " selected" : "") + '>Stratégiques uniquement</option>' +
-    '<option value="non"' + (FILTERS.strat === "non" ? " selected" : "") + '>Non stratégiques</option>';
-}
-
-// ------------------------------------------------------------
-// Affichage
-// ------------------------------------------------------------
-function renderBars(id, counts) {
-  var keys = [];
-  var k, i, max = 0, html = "", pct;
-  for (k in counts) {
-    if (counts.hasOwnProperty(k)) { keys.push(k); if (counts[k] > max) { max = counts[k]; } }
-  }
+function countBy(rows, fn) { var o = {}, i, k; for (i = 0; i < rows.length; i++) { k = fn(rows[i]) || "(non renseigné)"; o[k] = (o[k] || 0) + 1; } return o; }
+function bars(title, counts) {
+  var keys = [], k, i, mx = 0, h = '<div class="box"><h2>' + esc(title) + "</h2>";
+  for (k in counts) { if (counts.hasOwnProperty(k)) { keys.push(k); if (counts[k] > mx) { mx = counts[k]; } } }
   keys.sort(function (a, b) { return counts[b] - counts[a]; });
-  if (keys.length === 0) {
-    document.getElementById(id).innerHTML = '<div class="empty">Aucune donnée</div>';
-    return;
-  }
+  if (!keys.length) { return h + '<div class="empty">Aucune donnée</div></div>'; }
   for (i = 0; i < keys.length; i++) {
-    pct = max > 0 ? Math.round(counts[keys[i]] * 100 / max) : 0;
-    html += '<div class="bar"><div class="n" title="' + esc(keys[i]) + '">' + esc(keys[i]) +
-      '</div><div class="t"><div class="f" style="width:' + pct + '%"></div></div><div class="c">' +
-      counts[keys[i]] + '</div></div>';
+    h += '<div class="bar"><div class="n" title="' + esc(keys[i]) + '">' + esc(keys[i]) + '</div><div class="t"><div class="f" style="width:' + Math.round(counts[keys[i]] * 100 / mx) + '%"></div></div><div class="c">' + counts[keys[i]] + "</div></div>";
   }
-  document.getElementById(id).innerHTML = html;
+  return h + "</div>";
 }
+function tbl(title, rows, cols, limit) {
+  var h = '<div class="box"><h2>' + esc(title) + ' <span class="fr-badge fr-badge--sm fr-badge--info">' + rows.length + '</span></h2><div class="tw"><table><tr>', i, j, n = limit ? Math.min(limit, rows.length) : rows.length;
+  for (j = 0; j < cols.length; j++) { h += "<th>" + esc(cols[j][0]) + "</th>"; }
+  h += "</tr>";
+  for (i = 0; i < n; i++) {
+    h += "<tr>";
+    for (j = 0; j < cols.length; j++) { h += "<td>" + esc(cols[j][1](rows[i])) + "</td>"; }
+    h += "</tr>";
+  }
+  if (!rows.length) { h += '<tr><td colspan="' + cols.length + '" class="empty">Aucun produit.</td></tr>'; }
+  h += "</table></div>";
+  if (limit && rows.length > limit) { h += '<div class="note">' + limit + " premiers produits affichés sur " + rows.length + ".</div>"; }
+  return h + "</div>";
+}
+function sel(fn, rows) { var o = [], i; for (i = 0; i < rows.length; i++) { if (fn(rows[i])) { o.push(rows[i]); } } return o; }
+function P(r) { return T(r, COL.produit); }
+function pc(c, sc) { return function (r) { var p = pct(r, c, sc); return p === null ? "" : p + " %"; }; }
+function tx(c) { return function (r) { return T(r, c); }; }
+function lst(c) { return function (r) { return toList(r[c]).join(", "); }; }
+var C_BASE = [["Produit", P], ["Statut", tx("Statut_actuel")], ["Département", tx("Departement_SDPC")], ["Criticité", tx("Criticite")]];
+
+// Onglets
+function vOverview(rows) {
+  var al = [["Homologation à échéance (" + CFG.moisHomol + " mois)", homolBientot, [["Fin de validité", function (r) { return fmtDate(toDate(r[COL.homolFin])); }]]],
+    ["Complétion faible (< " + CFG.complFaible + " %)", complBas, [["Complétion", pc(COL.compl, SC)]]],
+    ["Obsolètes ou en décommissionnement", isObso, [["Obsolescence", tx(COL.obso)]]],
+    ["Non mis à jour depuis " + CFG.joursMaj + " jours", vieux, [["Dernière MAJ", function (r) { return fmtDate(majDate(r)); }]]],
+    ["Critiques non inscrits au PCA", noPca, [["PCA", tx(COL.pca)]]]], h = "", i;
+  h += kpis([["Produits dans la sélection", rows.length], ["Produits actifs", cnt(rows, isActive)], ["Produits stratégiques", cnt(rows, isStrat)],
+    ["Critiques ou essentiels", cnt(rows, isCrit)], ["Complétion moyenne", avgC(rows)], ["Produits à compléter", cnt(rows, function (r) { return complBas(r) || videsCrit(r); }), 1]]);
+  h += '<div class="cols">' + bars("Produits par statut actuel", countBy(rows, tx(COL.statut))) + bars("Produits par département", countBy(rows, tx(COL.dept))) + "</div>";
+  for (i = 0; i < al.length; i++) { h += tbl("Alerte : " + al[i][0], sel(al[i][1], rows), [["Produit", P], ["Département", tx(COL.dept)]].concat(al[i][2]), 8); }
+  return h;
+}
+function avgC(rows) {
+  var s = 0, n = 0, i, p;
+  for (i = 0; i < rows.length; i++) { p = pct(rows[i], COL.compl, SC); if (p !== null) { s += p; n++; } }
+  return n ? Math.round(s / n) + " %" : "-";
+}
+function vPortfolio(rows) {
+  var K = [["En cadrage", "cadrage"], ["En build", "build"], ["En amélioration continue", "amelioration"], ["En MCO", "mco"], ["En transfert", "transfert"], ["À décommissionner", "adecom"], ["Décommissionnés", "decom"]], it = [["Produits", rows.length]], i;
+  for (i = 0; i < K.length; i++) { it.push([K[i][0], cnt(rows, (function (w) { return function (r) { return statutIs(r, w); }; })(K[i][1]))]); }
+  return kpis(it) + '<div class="cols">' + bars("Cycle de vie", countBy(rows, tx(COL.statut))) + bars("Département", countBy(rows, tx(COL.dept))) + "</div>" +
+    tbl("Produits", rows, C_BASE.concat([["Stratégique", function (r) { return isStrat(r) ? "Oui" : "Non"; }], ["Complétion", pc(COL.compl, SC)], ["Dernière MAJ", function (r) { return fmtDate(majDate(r)); }]]), 150);
+}
+function vRisks(rows) {
+  var dl = function (r) { return fmtDate(toDate(r[COL.homolFin])); };
+  return kpis([["Produits homologués", cnt(rows, homolOk)], ["Homologations en cours", cnt(rows, homolEnCours)], ["Échéance < 3 mois", cnt(rows, function (r) { var d = toDate(r[COL.homolFin]), l = new Date(); l.setMonth(l.getMonth() + 3); return d !== null && d <= l; }), 1],
+    ["Échéance < " + CFG.moisHomol + " mois", cnt(rows, homolBientot), 1], ["RGAA < " + CFG.rgaaSeuil + " %", cnt(rows, rgaaBas), 1], ["Critiques sans PCA", cnt(rows, noPca), 1],
+    ["Produits obsolètes", cnt(rows, isObso), 1], ["Champs critiques manquants", cnt(rows, videsCrit), 1]]) +
+    tbl("Homologation bientôt échue", sel(homolBientot, rows), C_BASE.concat([["Homologation", tx(COL.homol)], ["Fin de validité", dl]]), 50) +
+    tbl("Produits critiques sans PCA", sel(noPca, rows), C_BASE.concat([["PCA", tx(COL.pca)]]), 50) +
+    tbl("Conformité RGAA insuffisante", sel(rgaaBas, rows), C_BASE.concat([["RGAA", pc(COL.rgaa, SR)]]), 50) +
+    tbl("Obsolètes ou à décommissionner", sel(isObso, rows), C_BASE.concat([["Obsolescence", tx(COL.obso)]]), 50);
+}
+function vModern(rows) {
+  var split = function (c) { return function (r) { var l = toList(r[c]), o = [], i; for (i = 0; i < l.length; i++) { if (!isNo(l[i])) { o.push(l[i]); } } return o.join(", "); }; };
+  return kpis([["Ciblés RenovSI 2026", cnt(rows, cible26)], ["Ciblés RenovSI 2027", cnt(rows, cible27)], ["Migrations effectuées", cnt(rows, migFaite)], ["Migrations en cours", cnt(rows, migEnCours)],
+    ["Sans trajectoire définie", cnt(rows, sansTraj), 1]]) +
+    '<div class="cols">' + bars("État RenovSI 2026", countBy(rows, tx(COL.e26))) + bars("État migration PIC", countBy(rows, tx(COL.pic))) +
+    bars("Cible RenovSI 2026", countBy(rows, split(COL.c26))) + bars("Cible RenovSI 2027", countBy(rows, split(COL.c27))) + "</div>" +
+    tbl("Produits", rows, [["Produit", P], ["Cible 2026", lst(COL.c26)], ["Cible 2027", lst(COL.c27)], ["État RenovSI", tx(COL.e26)], ["État PIC", tx(COL.pic)], ["Criticité", tx(COL.crit)], ["Département", tx(COL.dept)]], 150);
+}
+function vMaturity(rows) {
+  var it = [], g = "", i, c;
+  for (i = 0; i < DIMS.length; i++) { c = COL[DIMS[i][1]]; it.push(["Sans " + DIMS[i][0], cnt(rows, (function (cc) { return function (r) { return !filled(r, cc); }; })(c)), 1]); }
+  it.push(["Maturité incomplète", cnt(rows, matInc), 1]); it.push(["Complétion moyenne", avgC(rows)]);
+  for (i = 0; i < DIMS.length; i++) { g += bars(DIMS[i][0], countBy(rows, tx(COL[DIMS[i][1]]))); }
+  return kpis(it) + '<div class="cols">' + g + "</div>" + tbl("Produits à données de maturité incomplètes", sel(matInc, rows), C_BASE.concat([["Complétion", pc(COL.compl, SC)]]), 100);
+}
+var VIEWS = { overview: vOverview, portfolio: vPortfolio, risks: vRisks, modern: vModern, maturity: vMaturity };
 
 function render() {
   try {
-    var rows = [];
-    var i, r, s, d;
-    var nAct = 0, nStrat = 0, nCrit = 0;
-    var sumCompl = 0, nCompl = 0, maxCompl = 0;
-    var byStatut = {}, byDept = {};
-
-    for (i = 0; i < ALL.length; i++) {
-      if (passFilters(ALL[i])) { rows.push(ALL[i]); }
-    }
-
-    // Les taux peuvent être stockés en 0-1 ou en 0-100 : on détecte l'échelle
-    for (i = 0; i < ALL.length; i++) {
-      if (typeof ALL[i][COL.compl] === "number" && ALL[i][COL.compl] > maxCompl) { maxCompl = ALL[i][COL.compl]; }
-    }
-    var factor = maxCompl > 0 && maxCompl <= 1 ? 100 : 1;
-
-    for (i = 0; i < rows.length; i++) {
-      r = rows[i];
-      if (isActive(r)) { nAct++; }
-      if (isStrategic(r)) { nStrat++; }
-      if (isCritical(r)) { nCrit++; }
-      if (typeof r[COL.compl] === "number") { sumCompl += r[COL.compl] * factor; nCompl++; }
-      s = toText(r[COL.statut]) || "(non renseigné)";
-      d = toText(r[COL.dept]) || "(non renseigné)";
-      byStatut[s] = (byStatut[s] || 0) + 1;
-      byDept[d] = (byDept[d] || 0) + 1;
-    }
-
-    document.getElementById("k-total").textContent = rows.length;
-    document.getElementById("k-actifs").textContent = nAct;
-    document.getElementById("k-strat").textContent = nStrat;
-    document.getElementById("k-crit").textContent = nCrit;
-    document.getElementById("k-compl").textContent = nCompl > 0 ? Math.round(sumCompl / nCompl) + " %" : "-";
+    var rows = sel(passF, ALL), i, h = "";
+    for (i = 0; i < TABS.length; i++) { h += '<button type="button" class="tb' + (TABS[i][0] === TAB ? " on" : "") + '" data-t="' + TABS[i][0] + '">' + esc(TABS[i][1]) + "</button>"; }
+    document.getElementById("tabs").innerHTML = h;
     document.getElementById("count").textContent = rows.length + " produit(s) sur " + ALL.length;
-
-    renderBars("chart-statut", byStatut);
-    renderBars("chart-dept", byDept);
-
-    var html = "<tr><th>Produit</th><th>Statut actuel</th><th>Département</th><th>Criticité</th><th>Stratégique</th><th>Complétion</th></tr>";
-    var shown = rows.length;
-    for (i = 0; i < shown; i++) {
-      r = rows[i];
-      html += "<tr><td>" + esc(toText(r[COL.produit])) + "</td><td>" + esc(toText(r[COL.statut])) +
-        "</td><td>" + esc(toText(r[COL.dept])) + "</td><td>" + esc(toText(r[COL.crit])) +
-        "</td><td>" + (isStrategic(r) ? "Oui" : "Non") + "</td><td>" +
-        (typeof r[COL.compl] === "number" ? Math.round(r[COL.compl] * factor) + " %" : "") + "</td></tr>";
-    }
-    if (shown === 0) { html += '<tr><td colspan="6" class="empty">Aucun produit ne correspond aux filtres.</td></tr>'; }
-    document.getElementById("tbl").innerHTML = html;
-  } catch (e) {
-    showError(e.message);
-  }
+    document.getElementById("main").innerHTML = VIEWS[TAB](rows);
+  } catch (e) { showError(e.message); }
 }
 
-// ------------------------------------------------------------
-// Événements des filtres
-// ------------------------------------------------------------
-function bindFilters() {
-  document.getElementById("f-q").oninput = function () { FILTERS.q = this.value; render(); };
-  document.getElementById("f-statut").onchange = function () { FILTERS.statut = this.value; render(); };
-  document.getElementById("f-dept").onchange = function () { FILTERS.dept = this.value; render(); };
-  document.getElementById("f-crit").onchange = function () { FILTERS.crit = this.value; render(); };
-  document.getElementById("f-strat").onchange = function () { FILTERS.strat = this.value; render(); };
-  document.getElementById("f-reset").onclick = function () {
-    FILTERS = { q: "", statut: "", dept: "", crit: "", strat: "" };
-    document.getElementById("f-q").value = "";
-    buildSelects();
-    render();
-  };
+function uniq(c) {
+  var s = {}, o = [], i, t;
+  for (i = 0; i < ALL.length; i++) { t = T(ALL[i], c); if (t !== "" && !s[t]) { s[t] = true; o.push(t); } }
+  return o.sort();
+}
+function fill(id, label, vals, cur) {
+  var h = '<option value="">' + esc(label) + "</option>", i;
+  for (i = 0; i < vals.length; i++) { h += '<option value="' + esc(vals[i]) + '"' + (vals[i] === cur ? " selected" : "") + ">" + esc(vals[i]) + "</option>"; }
+  document.getElementById(id).innerHTML = h;
+}
+function buildSelects() {
+  fill("f-statut", "Tous les statuts", uniq(COL.statut), F.statut);
+  fill("f-dept", "Tous les départements", uniq(COL.dept), F.dept);
+  fill("f-crit", "Toutes les criticités", uniq(COL.crit), F.crit);
+  document.getElementById("f-strat").innerHTML = '<option value="">Stratégique : tous</option><option value="oui"' + (F.strat === "oui" ? " selected" : "") + '>Stratégiques</option><option value="non"' + (F.strat === "non" ? " selected" : "") + ">Non stratégiques</option>";
+}
+function bind() {
+  var map = { "f-statut": "statut", "f-dept": "dept", "f-crit": "crit", "f-strat": "strat" }, id;
+  document.getElementById("f-q").oninput = function () { F.q = this.value; render(); };
+  for (id in map) { if (map.hasOwnProperty(id)) { document.getElementById(id).onchange = (function (k) { return function () { F[k] = this.value; render(); }; })(map[id]); } }
+  document.getElementById("f-reset").onclick = function () { F = { q: "", statut: "", dept: "", crit: "", strat: "" }; document.getElementById("f-q").value = ""; buildSelects(); render(); };
+  document.getElementById("tabs").onclick = function (e) { var t = e.target.getAttribute("data-t"); if (t) { TAB = t; render(); } };
 }
 
-// ------------------------------------------------------------
-// Connexion Grist (structure validée)
-// ------------------------------------------------------------
 try {
-  bindFilters();
+  bind();
   grist.ready();
   grist.onRecords(function (records) {
-    try {
-      ALL = records || [];
-      buildSelects();
-      render();
-    } catch (e) {
-      showError(e.message);
-    }
+    try { ALL = records || []; SC = scaleOf(COL.compl); SR = scaleOf(COL.rgaa); buildSelects(); render(); } catch (e) { showError(e.message); }
   });
-} catch (e) {
-  showError("Connexion Grist impossible : " + e.message);
-}
+} catch (e) { showError("Connexion Grist impossible : " + e.message); }
 </script>
 </body>
 </html>
