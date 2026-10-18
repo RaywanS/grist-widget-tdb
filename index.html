@@ -35,10 +35,27 @@ th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #e5e5e5; w
 th { position: sticky; top: 0; background: #f0f0f0; }
 .empty { color: #777; font-style: italic; }
 .note { font-size: .75rem; color: #666; margin-top: 4px; }
+.kpi[data-d], .bar[data-d] { cursor: pointer; }
+.kpi.act { outline: 2px solid #000091; background: #e3e3fd; }
+.bar.act .n { font-weight: 700; color: #000091; }
+.bar.act .f { background: #6a6af4; }
+tr.rd td { background: #ffe9e9; color: #ce0500; font-weight: 600; }
+.chk { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; cursor: pointer; }
+.pt { display: none; }
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  body { background: #fff; padding: 0; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .tabs, .filters input, .filters select, .filters button, .chk { display: none !important; }
+  .pt { display: block; color: #666; margin-bottom: 6px; }
+  .tw { max-height: none; overflow: visible; }
+  .box, .kpi, tr { break-inside: avoid; }
+}
 </style>
 </head>
 <body>
 <h1>Tableau de bord SDPC</h1>
+<div id="ptitle" class="pt"></div>
 <div id="err"></div>
 <div class="tabs" id="tabs"></div>
 <div class="filters">
@@ -48,6 +65,10 @@ th { position: sticky; top: 0; background: #f0f0f0; }
   <select class="fr-select" id="f-crit"></select>
   <select class="fr-select" id="f-strat"></select>
   <button type="button" class="fr-btn fr-btn--secondary fr-btn--sm" id="f-reset">Réinitialiser</button>
+  <label class="chk"><input type="checkbox" id="f-red"> Complétion &lt; 80 % en rouge</label>
+  <button type="button" class="fr-btn fr-btn--tertiary fr-btn--sm" id="f-csv">Export CSV</button>
+  <button type="button" class="fr-btn fr-btn--tertiary fr-btn--sm" id="f-pdf">Export PDF</button>
+  <span id="drill" title="Cliquer pour retirer ce filtre"></span>
   <span class="count" id="count">Chargement...</span>
 </div>
 <div id="main"></div>
@@ -66,10 +87,10 @@ var COL = {
   imp: "Mesure_d_impact", del: "Delivery_iteration"
 };
 // Seuils modifiables
-var CFG = { complFaible: 50, rgaaSeuil: 75, joursMaj: 180, moisHomol: 6 };
+var CFG = { complRouge: 80, complFaible: 50, rgaaSeuil: 75, joursMaj: 180, moisHomol: 6 };
 
 var TABS = [["overview", "Vue d'ensemble"], ["portfolio", "Portefeuille"], ["risks", "Risques & conformité"], ["modern", "Modernisation"], ["maturity", "Maturité & qualité"]];
-var ALL = [], F = { q: "", statut: "", dept: "", crit: "", strat: "" }, TAB = "overview", SC = 1, SR = 1;
+var ALL = [], F = { q: "", statut: "", dept: "", crit: "", strat: "" }, TAB = "overview", SC = 1, SR = 1, DR = [], DRILL = null, REDON = false;
 
 function showError(m) { var e = document.getElementById("err"); e.style.display = "block"; e.textContent = "Erreur : " + m; }
 window.onerror = function (m, s, l) { showError(m + " (ligne " + l + ")"); };
@@ -150,24 +171,33 @@ function passF(r) {
   if (F.crit !== "" && T(r, COL.crit) !== F.crit) { return false; }
   if (F.strat === "oui" && !isStrat(r)) { return false; }
   if (F.strat === "non" && isStrat(r)) { return false; }
+  if (DRILL !== null && !DRILL.fn(r)) { return false; }
   return true;
 }
 
 // Briques d'affichage
 function cnt(rows, fn) { var n = 0, i; for (i = 0; i < rows.length; i++) { if (fn(rows[i])) { n++; } } return n; }
-function kpis(items) {
-  var h = '<div class="kpis">', i;
-  for (i = 0; i < items.length; i++) { h += '<div class="kpi' + (items[i][2] ? " w" : "") + '"><div class="v">' + items[i][1] + '</div><div class="l">' + esc(items[i][0]) + '</div></div>'; }
+function reg(label, fn) { DR.push({ label: label, fn: fn }); return DR.length - 1; }
+function isAct(label) { return DRILL !== null && DRILL.label === label; }
+function kpis(rows, items) {
+  var h = '<div class="kpis">', i, it, v, a, lab;
+  for (i = 0; i < items.length; i++) {
+    it = items[i]; a = ""; lab = "KPI : " + it[0];
+    if (typeof it[1] === "function") { v = cnt(rows, it[1]); a = ' data-d="' + reg(lab, it[1]) + '" title="Cliquer pour filtrer"'; } else { v = it[1]; }
+    h += '<div class="kpi' + (it[2] ? " w" : "") + (isAct(lab) ? " act" : "") + '"' + a + '><div class="v">' + v + '</div><div class="l">' + esc(it[0]) + "</div></div>";
+  }
   return h + "</div>";
 }
 function countBy(rows, fn) { var o = {}, i, k; for (i = 0; i < rows.length; i++) { k = fn(rows[i]) || "(non renseigné)"; o[k] = (o[k] || 0) + 1; } return o; }
-function bars(title, counts) {
-  var keys = [], k, i, mx = 0, h = '<div class="box"><h2>' + esc(title) + "</h2>";
+function mk(fn, k) { return function (r) { return (fn(r) || "(non renseigné)") === k; }; }
+function bars(title, rows, fn) {
+  var counts = countBy(rows, fn), keys = [], k, i, mx = 0, lab, h = '<div class="box"><h2>' + esc(title) + "</h2>";
   for (k in counts) { if (counts.hasOwnProperty(k)) { keys.push(k); if (counts[k] > mx) { mx = counts[k]; } } }
   keys.sort(function (a, b) { return counts[b] - counts[a]; });
   if (!keys.length) { return h + '<div class="empty">Aucune donnée</div></div>'; }
   for (i = 0; i < keys.length; i++) {
-    h += '<div class="bar"><div class="n" title="' + esc(keys[i]) + '">' + esc(keys[i]) + '</div><div class="t"><div class="f" style="width:' + Math.round(counts[keys[i]] * 100 / mx) + '%"></div></div><div class="c">' + counts[keys[i]] + "</div></div>";
+    lab = title + " : " + keys[i];
+    h += '<div class="bar' + (isAct(lab) ? " act" : "") + '" data-d="' + reg(lab, mk(fn, keys[i])) + '" title="Cliquer pour filtrer"><div class="n">' + esc(keys[i]) + '</div><div class="t"><div class="f" style="width:' + Math.round(counts[keys[i]] * 100 / mx) + '%"></div></div><div class="c">' + counts[keys[i]] + "</div></div>";
   }
   return h + "</div>";
 }
@@ -176,7 +206,7 @@ function tbl(title, rows, cols, limit) {
   for (j = 0; j < cols.length; j++) { h += "<th>" + esc(cols[j][0]) + "</th>"; }
   h += "</tr>";
   for (i = 0; i < n; i++) {
-    h += "<tr>";
+    h += (REDON && lowC(rows[i])) ? '<tr class="rd">' : "<tr>";
     for (j = 0; j < cols.length; j++) { h += "<td>" + esc(cols[j][1](rows[i])) + "</td>"; }
     h += "</tr>";
   }
@@ -193,66 +223,88 @@ function lst(c) { return function (r) { return toList(r[c]).join(", "); }; }
 var C_BASE = [["Produit", P], ["Statut", tx("Statut_actuel")], ["Département", tx("Departement_SDPC")], ["Criticité", tx("Criticite")]];
 
 // Onglets
-function vOverview(rows) {
-  var al = [["Homologation à échéance (" + CFG.moisHomol + " mois)", homolBientot, [["Fin de validité", function (r) { return fmtDate(toDate(r[COL.homolFin])); }]]],
-    ["Complétion faible (< " + CFG.complFaible + " %)", complBas, [["Complétion", pc(COL.compl, SC)]]],
-    ["Obsolètes ou en décommissionnement", isObso, [["Obsolescence", tx(COL.obso)]]],
-    ["Non mis à jour depuis " + CFG.joursMaj + " jours", vieux, [["Dernière MAJ", function (r) { return fmtDate(majDate(r)); }]]],
-    ["Critiques non inscrits au PCA", noPca, [["PCA", tx(COL.pca)]]]], h = "", i;
-  h += kpis([["Produits dans la sélection", rows.length], ["Produits actifs", cnt(rows, isActive)], ["Produits stratégiques", cnt(rows, isStrat)],
-    ["Critiques ou essentiels", cnt(rows, isCrit)], ["Complétion moyenne", avgC(rows)], ["Produits à compléter", cnt(rows, function (r) { return complBas(r) || videsCrit(r); }), 1]]);
-  h += '<div class="cols">' + bars("Produits par statut actuel", countBy(rows, tx(COL.statut))) + bars("Produits par département", countBy(rows, tx(COL.dept))) + "</div>";
-  for (i = 0; i < al.length; i++) { h += tbl("Alerte : " + al[i][0], sel(al[i][1], rows), [["Produit", P], ["Département", tx(COL.dept)]].concat(al[i][2]), 8); }
-  return h;
-}
 function avgC(rows) {
   var s = 0, n = 0, i, p;
   for (i = 0; i < rows.length; i++) { p = pct(rows[i], COL.compl, SC); if (p !== null) { s += p; n++; } }
   return n ? Math.round(s / n) + " %" : "-";
 }
+function dFin(r) { return fmtDate(toDate(r[COL.homolFin])); }
+function homol3(r) { var d = toDate(r[COL.homolFin]), l = new Date(); l.setMonth(l.getMonth() + 3); return d !== null && d <= l; }
+function mkS(w) { return function (r) { return statutIs(r, w); }; }
+function mkF(c) { return function (r) { return !filled(r, c); }; }
+function vOverview(rows) {
+  var al = [["Homologation à échéance (" + CFG.moisHomol + " mois)", homolBientot, [["Fin de validité", dFin]]],
+    ["Complétion faible (< " + CFG.complFaible + " %)", complBas, [["Complétion", pc(COL.compl, SC)]]],
+    ["Obsolètes ou en décommissionnement", isObso, [["Obsolescence", tx(COL.obso)]]],
+    ["Non mis à jour depuis " + CFG.joursMaj + " jours", vieux, [["Dernière MAJ", function (r) { return fmtDate(majDate(r)); }]]],
+    ["Critiques non inscrits au PCA", noPca, [["PCA", tx(COL.pca)]]]], h, i;
+  h = kpis(rows, [["Produits dans la sélection", rows.length], ["Produits actifs", isActive], ["Produits stratégiques", isStrat], ["Critiques ou essentiels", isCrit],
+    ["Complétion moyenne", avgC(rows)], ["Produits à compléter", function (r) { return complBas(r) || videsCrit(r); }, 1]]);
+  h += '<div class="cols">' + bars("Produits par statut actuel", rows, tx(COL.statut)) + bars("Produits par département", rows, tx(COL.dept)) + "</div>";
+  for (i = 0; i < al.length; i++) { h += tbl("Alerte : " + al[i][0], sel(al[i][1], rows), [["Produit", P], ["Département", tx(COL.dept)]].concat(al[i][2]), 8); }
+  return h;
+}
 function vPortfolio(rows) {
   var K = [["En cadrage", "cadrage"], ["En build", "build"], ["En amélioration continue", "amelioration"], ["En MCO", "mco"], ["En transfert", "transfert"], ["À décommissionner", "adecom"], ["Décommissionnés", "decom"]], it = [["Produits", rows.length]], i;
-  for (i = 0; i < K.length; i++) { it.push([K[i][0], cnt(rows, (function (w) { return function (r) { return statutIs(r, w); }; })(K[i][1]))]); }
-  return kpis(it) + '<div class="cols">' + bars("Cycle de vie", countBy(rows, tx(COL.statut))) + bars("Département", countBy(rows, tx(COL.dept))) + "</div>" +
+  for (i = 0; i < K.length; i++) { it.push([K[i][0], mkS(K[i][1])]); }
+  return kpis(rows, it) + '<div class="cols">' + bars("Cycle de vie", rows, tx(COL.statut)) + bars("Département", rows, tx(COL.dept)) + "</div>" +
     tbl("Produits", rows, C_BASE.concat([["Stratégique", function (r) { return isStrat(r) ? "Oui" : "Non"; }], ["Complétion", pc(COL.compl, SC)], ["Dernière MAJ", function (r) { return fmtDate(majDate(r)); }]]), 150);
 }
 function vRisks(rows) {
-  var dl = function (r) { return fmtDate(toDate(r[COL.homolFin])); };
-  return kpis([["Produits homologués", cnt(rows, homolOk)], ["Homologations en cours", cnt(rows, homolEnCours)], ["Échéance < 3 mois", cnt(rows, function (r) { var d = toDate(r[COL.homolFin]), l = new Date(); l.setMonth(l.getMonth() + 3); return d !== null && d <= l; }), 1],
-    ["Échéance < " + CFG.moisHomol + " mois", cnt(rows, homolBientot), 1], ["RGAA < " + CFG.rgaaSeuil + " %", cnt(rows, rgaaBas), 1], ["Critiques sans PCA", cnt(rows, noPca), 1],
-    ["Produits obsolètes", cnt(rows, isObso), 1], ["Champs critiques manquants", cnt(rows, videsCrit), 1]]) +
-    tbl("Homologation bientôt échue", sel(homolBientot, rows), C_BASE.concat([["Homologation", tx(COL.homol)], ["Fin de validité", dl]]), 50) +
+  return kpis(rows, [["Produits homologués", homolOk], ["Homologations en cours", homolEnCours], ["Échéance < 3 mois", homol3, 1], ["Échéance < " + CFG.moisHomol + " mois", homolBientot, 1],
+    ["RGAA < " + CFG.rgaaSeuil + " %", rgaaBas, 1], ["Critiques sans PCA", noPca, 1], ["Produits obsolètes", isObso, 1], ["Champs critiques manquants", videsCrit, 1]]) +
+    tbl("Homologation bientôt échue", sel(homolBientot, rows), C_BASE.concat([["Homologation", tx(COL.homol)], ["Fin de validité", dFin]]), 50) +
     tbl("Produits critiques sans PCA", sel(noPca, rows), C_BASE.concat([["PCA", tx(COL.pca)]]), 50) +
     tbl("Conformité RGAA insuffisante", sel(rgaaBas, rows), C_BASE.concat([["RGAA", pc(COL.rgaa, SR)]]), 50) +
     tbl("Obsolètes ou à décommissionner", sel(isObso, rows), C_BASE.concat([["Obsolescence", tx(COL.obso)]]), 50);
 }
+function splitC(c) { return function (r) { var l = toList(r[c]), o = [], i; for (i = 0; i < l.length; i++) { if (!isNo(l[i])) { o.push(l[i]); } } return o.join(", "); }; }
 function vModern(rows) {
-  var split = function (c) { return function (r) { var l = toList(r[c]), o = [], i; for (i = 0; i < l.length; i++) { if (!isNo(l[i])) { o.push(l[i]); } } return o.join(", "); }; };
-  return kpis([["Ciblés RenovSI 2026", cnt(rows, cible26)], ["Ciblés RenovSI 2027", cnt(rows, cible27)], ["Migrations effectuées", cnt(rows, migFaite)], ["Migrations en cours", cnt(rows, migEnCours)],
-    ["Sans trajectoire définie", cnt(rows, sansTraj), 1]]) +
-    '<div class="cols">' + bars("État RenovSI 2026", countBy(rows, tx(COL.e26))) + bars("État migration PIC", countBy(rows, tx(COL.pic))) +
-    bars("Cible RenovSI 2026", countBy(rows, split(COL.c26))) + bars("Cible RenovSI 2027", countBy(rows, split(COL.c27))) + "</div>" +
+  return kpis(rows, [["Ciblés RenovSI 2026", cible26], ["Ciblés RenovSI 2027", cible27], ["Migrations effectuées", migFaite], ["Migrations en cours", migEnCours], ["Sans trajectoire définie", sansTraj, 1]]) +
+    '<div class="cols">' + bars("État RenovSI 2026", rows, tx(COL.e26)) + bars("État migration PIC", rows, tx(COL.pic)) +
+    bars("Cible RenovSI 2026", rows, splitC(COL.c26)) + bars("Cible RenovSI 2027", rows, splitC(COL.c27)) + "</div>" +
     tbl("Produits", rows, [["Produit", P], ["Cible 2026", lst(COL.c26)], ["Cible 2027", lst(COL.c27)], ["État RenovSI", tx(COL.e26)], ["État PIC", tx(COL.pic)], ["Criticité", tx(COL.crit)], ["Département", tx(COL.dept)]], 150);
 }
 function vMaturity(rows) {
-  var it = [], g = "", i, c;
-  for (i = 0; i < DIMS.length; i++) { c = COL[DIMS[i][1]]; it.push(["Sans " + DIMS[i][0], cnt(rows, (function (cc) { return function (r) { return !filled(r, cc); }; })(c)), 1]); }
-  it.push(["Maturité incomplète", cnt(rows, matInc), 1]); it.push(["Complétion moyenne", avgC(rows)]);
-  for (i = 0; i < DIMS.length; i++) { g += bars(DIMS[i][0], countBy(rows, tx(COL[DIMS[i][1]]))); }
-  return kpis(it) + '<div class="cols">' + g + "</div>" + tbl("Produits à données de maturité incomplètes", sel(matInc, rows), C_BASE.concat([["Complétion", pc(COL.compl, SC)]]), 100);
+  var it = [], g = "", i;
+  for (i = 0; i < DIMS.length; i++) { it.push(["Sans " + DIMS[i][0], mkF(COL[DIMS[i][1]]), 1]); }
+  it.push(["Maturité incomplète", matInc, 1]); it.push(["Complétion moyenne", avgC(rows)]);
+  for (i = 0; i < DIMS.length; i++) { g += bars(DIMS[i][0], rows, tx(COL[DIMS[i][1]])); }
+  return kpis(rows, it) + '<div class="cols">' + g + "</div>" + tbl("Produits à données de maturité incomplètes", sel(matInc, rows), C_BASE.concat([["Complétion", pc(COL.compl, SC)]]), 100);
 }
 var VIEWS = { overview: vOverview, portfolio: vPortfolio, risks: vRisks, modern: vModern, maturity: vMaturity };
 
 function render() {
   try {
+    DR = [];
     var rows = sel(passF, ALL), i, h = "";
     for (i = 0; i < TABS.length; i++) { h += '<button type="button" class="tb' + (TABS[i][0] === TAB ? " on" : "") + '" data-t="' + TABS[i][0] + '">' + esc(TABS[i][1]) + "</button>"; }
     document.getElementById("tabs").innerHTML = h;
     document.getElementById("count").textContent = rows.length + " produit(s) sur " + ALL.length;
+    document.getElementById("drill").innerHTML = DRILL ? '<span class="fr-badge fr-badge--sm fr-badge--blue-ecume">' + esc(DRILL.label) + " \u2715</span>" : "";
+    document.getElementById("ptitle").textContent = "Onglet : " + (TABS[0][0] === TAB ? TABS[0][1] : TABS[[0, 1, 2, 3, 4].filter(function (k) { return TABS[k][0] === TAB; })[0]][1]) + " - " + fmtDate(new Date());
     document.getElementById("main").innerHTML = VIEWS[TAB](rows);
   } catch (e) { showError(e.message); }
 }
 
+function lowC(r) { var p = pct(r, COL.compl, SC); return p !== null && p < CFG.complRouge; }
+function csvCell(v) { v = String(v === null || v === undefined ? "" : v); return /[";\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+function exportCsv() {
+  var rows = sel(passF, ALL), i, j, l = [], line,
+    cols = [["Produit", P], ["Statut actuel", tx(COL.statut)], ["Département", tx(COL.dept)], ["Criticité", tx(COL.crit)],
+      ["Stratégique", function (r) { return isStrat(r) ? "Oui" : "Non"; }], ["Complétion (%)", function (r) { var p = pct(r, COL.compl, SC); return p === null ? "" : p; }],
+      ["Dernière mise à jour", function (r) { return fmtDate(majDate(r)); }], ["Homologation", tx(COL.homol)], ["Fin d'homologation", dFin],
+      ["RGAA (%)", function (r) { var p = pct(r, COL.rgaa, SR); return p === null ? "" : p; }], ["PCA", tx(COL.pca)], ["Obsolescence", tx(COL.obso)],
+      ["Cible RenovSI 2026", lst(COL.c26)], ["Cible RenovSI 2027", lst(COL.c27)], ["État RenovSI 2026", tx(COL.e26)], ["État PIC", tx(COL.pic)],
+      ["Vision & stratégie", tx(COL.vis)], ["Connaissance utilisateurs & design", tx(COL.usr)], ["Mesure d'impact", tx(COL.imp)], ["Delivery & itération", tx(COL.del)]];
+  line = []; for (j = 0; j < cols.length; j++) { line.push(csvCell(cols[j][0])); } l.push(line.join(";"));
+  for (i = 0; i < rows.length; i++) { line = []; for (j = 0; j < cols.length; j++) { line.push(csvCell(cols[j][1](rows[i]))); } l.push(line.join(";")); }
+  var blob = new Blob(["\ufeff" + l.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "produits_sdpc.csv";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
 function uniq(c) {
   var s = {}, o = [], i, t;
   for (i = 0; i < ALL.length; i++) { t = T(ALL[i], c); if (t !== "" && !s[t]) { s[t] = true; o.push(t); } }
@@ -273,7 +325,22 @@ function bind() {
   var map = { "f-statut": "statut", "f-dept": "dept", "f-crit": "crit", "f-strat": "strat" }, id;
   document.getElementById("f-q").oninput = function () { F.q = this.value; render(); };
   for (id in map) { if (map.hasOwnProperty(id)) { document.getElementById(id).onchange = (function (k) { return function () { F[k] = this.value; render(); }; })(map[id]); } }
-  document.getElementById("f-reset").onclick = function () { F = { q: "", statut: "", dept: "", crit: "", strat: "" }; document.getElementById("f-q").value = ""; buildSelects(); render(); };
+  document.getElementById("f-reset").onclick = function () { DRILL = null; F = { q: "", statut: "", dept: "", crit: "", strat: "" }; document.getElementById("f-q").value = ""; buildSelects(); render(); };
+  document.getElementById("main").onclick = function (e) {
+    var n = e.target, d;
+    while (n && n !== this) {
+      if (n.getAttribute && n.getAttribute("data-d") !== null) {
+        d = DR[+n.getAttribute("data-d")];
+        if (d) { DRILL = (DRILL !== null && DRILL.label === d.label) ? null : d; render(); }
+        return;
+      }
+      n = n.parentNode;
+    }
+  };
+  document.getElementById("drill").onclick = function () { DRILL = null; render(); };
+  document.getElementById("f-red").onchange = function () { REDON = this.checked; render(); };
+  document.getElementById("f-csv").onclick = function () { try { exportCsv(); } catch (e) { showError("Export CSV : " + e.message); } };
+  document.getElementById("f-pdf").onclick = function () { try { window.print(); } catch (e) { showError("Export PDF : " + e.message); } };
   document.getElementById("tabs").onclick = function (e) { var t = e.target.getAttribute("data-t"); if (t) { TAB = t; render(); } };
 }
 
