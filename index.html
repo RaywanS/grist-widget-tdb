@@ -1,12 +1,334 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Mon widget Grist</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tableau de bord SDPC</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; padding: 14px; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; font-size: 14px; color: #1f2933; background: #f4f6f8; }
+h1 { font-size: 20px; margin: 0 0 4px 0; }
+.sub { color: #52606d; margin-bottom: 12px; }
+#err { display: none; background: #fde8e8; border: 1px solid #e08a8a; color: #8a1c1c; padding: 10px 12px; border-radius: 6px; margin-bottom: 12px; white-space: pre-wrap; font-size: 13px; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #fff; border: 1px solid #d9e0e6; border-radius: 8px; padding: 10px; margin-bottom: 12px; }
+.filters input, .filters select { padding: 6px 8px; border: 1px solid #b8c4ce; border-radius: 5px; font-size: 13px; background: #fff; }
+.filters input { min-width: 180px; }
+.filters button { padding: 6px 12px; border: 1px solid #1d5f8a; background: #1d5f8a; color: #fff; border-radius: 5px; font-size: 13px; cursor: pointer; }
+.filters button:hover { background: #164a6b; }
+.filters button:focus, .filters input:focus, .filters select:focus { outline: 2px solid #f0a020; outline-offset: 1px; }
+.count { margin-left: auto; font-weight: 600; color: #1d5f8a; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.kpi { background: #fff; border: 1px solid #d9e0e6; border-radius: 8px; padding: 10px 12px; }
+.kpi .v { font-size: 26px; font-weight: 700; color: #1d5f8a; }
+.kpi .l { color: #52606d; font-size: 12px; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.box { background: #fff; border: 1px solid #d9e0e6; border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.box h2 { font-size: 14px; margin: 0 0 8px 0; }
+.bar { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 13px; }
+.bar .n { width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar .t { flex: 1; background: #e6ecf1; border-radius: 3px; height: 12px; }
+.bar .f { background: #1d5f8a; height: 12px; border-radius: 3px; }
+.bar .c { width: 34px; text-align: right; font-weight: 600; }
+.tw { max-height: 420px; overflow: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #e6ecf1; white-space: nowrap; }
+th { position: sticky; top: 0; background: #eef2f5; }
+.empty { color: #7b8794; font-style: italic; }
+</style>
 </head>
 <body>
-  <h1>Mon widget Grist fonctionne !</h1>
-  <p>Mon hébergement GitHub est prêt.</p>
+
+<h1>Tableau de bord SDPC</h1>
+<div class="sub">Suivi du portefeuille de produits numériques</div>
+
+<div id="err"></div>
+
+<div class="filters">
+  <input type="text" id="f-q" placeholder="Rechercher un produit">
+  <select id="f-statut"></select>
+  <select id="f-dept"></select>
+  <select id="f-crit"></select>
+  <select id="f-strat"></select>
+  <button type="button" id="f-reset">Réinitialiser les filtres</button>
+  <span class="count" id="count">Chargement...</span>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="v" id="k-total">-</div><div class="l">Produits dans la sélection</div></div>
+  <div class="kpi"><div class="v" id="k-actifs">-</div><div class="l">Produits actifs</div></div>
+  <div class="kpi"><div class="v" id="k-strat">-</div><div class="l">Produits stratégiques</div></div>
+  <div class="kpi"><div class="v" id="k-crit">-</div><div class="l">Produits critiques ou essentiels</div></div>
+  <div class="kpi"><div class="v" id="k-compl">-</div><div class="l">Complétion moyenne</div></div>
+</div>
+
+<div class="cols">
+  <div class="box"><h2>Produits par statut actuel</h2><div id="chart-statut"></div></div>
+  <div class="box"><h2>Produits par département</h2><div id="chart-dept"></div></div>
+</div>
+
+<div class="box" style="margin-top:12px">
+  <h2>Liste des produits</h2>
+  <div class="tw"><table id="tbl"></table></div>
+</div>
+
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script>
+// ------------------------------------------------------------
+// Identifiants des colonnes Grist (modifiables ici uniquement)
+// ------------------------------------------------------------
+var COL = {
+  produit: "Produit",
+  statut: "Statut_actuel",
+  dept: "Departement_SDPC",
+  crit: "Criticite",
+  strat: "Produit_strategique",
+  compl: "Taux_de_completion"
+};
+
+var ALL = [];
+var FILTERS = { q: "", statut: "", dept: "", crit: "", strat: "" };
+
+// ------------------------------------------------------------
+// Affichage des erreurs dans la page (pas d'écran blanc)
+// ------------------------------------------------------------
+function showError(msg) {
+  var el = document.getElementById("err");
+  el.style.display = "block";
+  el.textContent = "Erreur : " + msg;
+}
+window.onerror = function (message, source, line) {
+  showError(message + " (ligne " + line + ")");
+};
+
+// ------------------------------------------------------------
+// Fonctions utilitaires
+// ------------------------------------------------------------
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// Transforme n'importe quelle valeur Grist en liste de textes.
+// Gère : vide, texte, tableau Grist ["L", "a", "b"], texte JSON "[...]".
+function toList(v) {
+  var out = [];
+  var i;
+  if (v === null || v === undefined || v === "") { return out; }
+  if (Array.isArray(v)) {
+    for (i = 0; i < v.length; i++) {
+      if (i === 0 && v[i] === "L") { continue; }
+      if (v[i] !== null && v[i] !== undefined && v[i] !== "") { out.push(String(v[i])); }
+    }
+    return out;
+  }
+  if (typeof v === "string" && v.charAt(0) === "[") {
+    try {
+      return toList(JSON.parse(v));
+    } catch (e) {
+      return [v];
+    }
+  }
+  return [String(v)];
+}
+
+// Valeur texte simple (premier élément si liste)
+function toText(v) {
+  var l = toList(v);
+  return l.length > 0 ? l[0] : "";
+}
+
+function norm(s) {
+  return String(s).toLowerCase();
+}
+
+// ------------------------------------------------------------
+// Règles métier (à ajuster selon les vraies valeurs de vos listes)
+// ------------------------------------------------------------
+// Actif = statut renseigné et qui ne contient pas "décommission"
+function isActive(rec) {
+  var s = norm(toText(rec[COL.statut]));
+  if (s === "") { return false; }
+  return s.indexOf("commission") === -1;
+}
+
+// Stratégique = au moins une valeur différente de non / aucun
+function isStrategic(rec) {
+  var l = toList(rec[COL.strat]);
+  var i, s;
+  for (i = 0; i < l.length; i++) {
+    s = norm(l[i]);
+    if (s !== "non" && s !== "aucun" && s !== "false") { return true; }
+  }
+  return false;
+}
+
+// Critique ou essentiel (en excluant "non critique")
+function isCritical(rec) {
+  var s = norm(toText(rec[COL.crit]));
+  if (s.indexOf("non") === 0) { return false; }
+  return s.indexOf("critique") !== -1 || s.indexOf("essentiel") !== -1;
+}
+
+// ------------------------------------------------------------
+// Filtres
+// ------------------------------------------------------------
+function passFilters(rec) {
+  var name = norm(toText(rec[COL.produit]));
+  if (FILTERS.q !== "" && name.indexOf(norm(FILTERS.q)) === -1) { return false; }
+  if (FILTERS.statut !== "" && toText(rec[COL.statut]) !== FILTERS.statut) { return false; }
+  if (FILTERS.dept !== "" && toText(rec[COL.dept]) !== FILTERS.dept) { return false; }
+  if (FILTERS.crit !== "" && toText(rec[COL.crit]) !== FILTERS.crit) { return false; }
+  if (FILTERS.strat === "oui" && !isStrategic(rec)) { return false; }
+  if (FILTERS.strat === "non" && isStrategic(rec)) { return false; }
+  return true;
+}
+
+function uniqueValues(col) {
+  var seen = {};
+  var out = [];
+  var i, t;
+  for (i = 0; i < ALL.length; i++) {
+    t = toText(ALL[i][col]);
+    if (t !== "" && !seen[t]) { seen[t] = true; out.push(t); }
+  }
+  out.sort();
+  return out;
+}
+
+function fillSelect(id, label, values, current) {
+  var el = document.getElementById(id);
+  var html = '<option value="">' + esc(label) + '</option>';
+  var i, sel;
+  for (i = 0; i < values.length; i++) {
+    sel = values[i] === current ? " selected" : "";
+    html += '<option value="' + esc(values[i]) + '"' + sel + '>' + esc(values[i]) + '</option>';
+  }
+  el.innerHTML = html;
+}
+
+function buildSelects() {
+  fillSelect("f-statut", "Tous les statuts", uniqueValues(COL.statut), FILTERS.statut);
+  fillSelect("f-dept", "Tous les départements", uniqueValues(COL.dept), FILTERS.dept);
+  fillSelect("f-crit", "Toutes les criticités", uniqueValues(COL.crit), FILTERS.crit);
+  var el = document.getElementById("f-strat");
+  el.innerHTML = '<option value="">Stratégique : tous</option>' +
+    '<option value="oui"' + (FILTERS.strat === "oui" ? " selected" : "") + '>Stratégiques uniquement</option>' +
+    '<option value="non"' + (FILTERS.strat === "non" ? " selected" : "") + '>Non stratégiques</option>';
+}
+
+// ------------------------------------------------------------
+// Affichage
+// ------------------------------------------------------------
+function renderBars(id, counts) {
+  var keys = [];
+  var k, i, max = 0, html = "", pct;
+  for (k in counts) {
+    if (counts.hasOwnProperty(k)) { keys.push(k); if (counts[k] > max) { max = counts[k]; } }
+  }
+  keys.sort(function (a, b) { return counts[b] - counts[a]; });
+  if (keys.length === 0) {
+    document.getElementById(id).innerHTML = '<div class="empty">Aucune donnée</div>';
+    return;
+  }
+  for (i = 0; i < keys.length; i++) {
+    pct = max > 0 ? Math.round(counts[keys[i]] * 100 / max) : 0;
+    html += '<div class="bar"><div class="n" title="' + esc(keys[i]) + '">' + esc(keys[i]) +
+      '</div><div class="t"><div class="f" style="width:' + pct + '%"></div></div><div class="c">' +
+      counts[keys[i]] + '</div></div>';
+  }
+  document.getElementById(id).innerHTML = html;
+}
+
+function render() {
+  try {
+    var rows = [];
+    var i, r, s, d;
+    var nAct = 0, nStrat = 0, nCrit = 0;
+    var sumCompl = 0, nCompl = 0, maxCompl = 0;
+    var byStatut = {}, byDept = {};
+
+    for (i = 0; i < ALL.length; i++) {
+      if (passFilters(ALL[i])) { rows.push(ALL[i]); }
+    }
+
+    // Les taux peuvent être stockés en 0-1 ou en 0-100 : on détecte l'échelle
+    for (i = 0; i < ALL.length; i++) {
+      if (typeof ALL[i][COL.compl] === "number" && ALL[i][COL.compl] > maxCompl) { maxCompl = ALL[i][COL.compl]; }
+    }
+    var factor = maxCompl > 0 && maxCompl <= 1 ? 100 : 1;
+
+    for (i = 0; i < rows.length; i++) {
+      r = rows[i];
+      if (isActive(r)) { nAct++; }
+      if (isStrategic(r)) { nStrat++; }
+      if (isCritical(r)) { nCrit++; }
+      if (typeof r[COL.compl] === "number") { sumCompl += r[COL.compl] * factor; nCompl++; }
+      s = toText(r[COL.statut]) || "(non renseigné)";
+      d = toText(r[COL.dept]) || "(non renseigné)";
+      byStatut[s] = (byStatut[s] || 0) + 1;
+      byDept[d] = (byDept[d] || 0) + 1;
+    }
+
+    document.getElementById("k-total").textContent = rows.length;
+    document.getElementById("k-actifs").textContent = nAct;
+    document.getElementById("k-strat").textContent = nStrat;
+    document.getElementById("k-crit").textContent = nCrit;
+    document.getElementById("k-compl").textContent = nCompl > 0 ? Math.round(sumCompl / nCompl) + " %" : "-";
+    document.getElementById("count").textContent = rows.length + " produit(s) sur " + ALL.length;
+
+    renderBars("chart-statut", byStatut);
+    renderBars("chart-dept", byDept);
+
+    var html = "<tr><th>Produit</th><th>Statut actuel</th><th>Département</th><th>Criticité</th><th>Stratégique</th><th>Complétion</th></tr>";
+    var shown = rows.length;
+    for (i = 0; i < shown; i++) {
+      r = rows[i];
+      html += "<tr><td>" + esc(toText(r[COL.produit])) + "</td><td>" + esc(toText(r[COL.statut])) +
+        "</td><td>" + esc(toText(r[COL.dept])) + "</td><td>" + esc(toText(r[COL.crit])) +
+        "</td><td>" + (isStrategic(r) ? "Oui" : "Non") + "</td><td>" +
+        (typeof r[COL.compl] === "number" ? Math.round(r[COL.compl] * factor) + " %" : "") + "</td></tr>";
+    }
+    if (shown === 0) { html += '<tr><td colspan="6" class="empty">Aucun produit ne correspond aux filtres.</td></tr>'; }
+    document.getElementById("tbl").innerHTML = html;
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+// ------------------------------------------------------------
+// Événements des filtres
+// ------------------------------------------------------------
+function bindFilters() {
+  document.getElementById("f-q").oninput = function () { FILTERS.q = this.value; render(); };
+  document.getElementById("f-statut").onchange = function () { FILTERS.statut = this.value; render(); };
+  document.getElementById("f-dept").onchange = function () { FILTERS.dept = this.value; render(); };
+  document.getElementById("f-crit").onchange = function () { FILTERS.crit = this.value; render(); };
+  document.getElementById("f-strat").onchange = function () { FILTERS.strat = this.value; render(); };
+  document.getElementById("f-reset").onclick = function () {
+    FILTERS = { q: "", statut: "", dept: "", crit: "", strat: "" };
+    document.getElementById("f-q").value = "";
+    buildSelects();
+    render();
+  };
+}
+
+// ------------------------------------------------------------
+// Connexion Grist (structure validée)
+// ------------------------------------------------------------
+try {
+  bindFilters();
+  grist.ready();
+  grist.onRecords(function (records) {
+    try {
+      ALL = records || [];
+      buildSelects();
+      render();
+    } catch (e) {
+      showError(e.message);
+    }
+  });
+} catch (e) {
+  showError("Connexion Grist impossible : " + e.message);
+}
+</script>
 </body>
 </html>
