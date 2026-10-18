@@ -51,6 +51,21 @@ tr.rd td { background: #ffe9e9; color: #ce0500; font-weight: 600; }
   .tw { max-height: none; overflow: visible; }
   .box, .kpi, tr { break-inside: avoid; }
 }
+.rt { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.tools { display: flex; gap: 12px; align-items: center; }
+.lk { background: none; border: 0; padding: 0; font: inherit; font-size: .75rem; color: #666; text-decoration: underline; cursor: pointer; }
+.lk:hover { color: #000091; }
+.chk { font-size: .75rem; color: #666; gap: 4px; }
+.chk input { margin: 0; }
+.th { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.tbtn { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; font-size: 1rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; text-align: left; color: #161616; }
+.chev::before { content: "\25BE"; color: #000091; }
+.tb.closed .chev::before { content: "\25B8"; }
+.tb.closed .th { margin-bottom: 0; }
+.tq { width: 180px; padding: 4px 8px; font-size: .8rem; }
+.sh { cursor: pointer; user-select: none; }
+.sh:hover { color: #000091; }
+@media print { .tq, .note, .tools { display: none !important; } }
 </style>
 </head>
 <body>
@@ -65,11 +80,15 @@ tr.rd td { background: #ffe9e9; color: #ce0500; font-weight: 600; }
   <select class="fr-select" id="f-crit"></select>
   <select class="fr-select" id="f-strat"></select>
   <button type="button" class="fr-btn fr-btn--secondary fr-btn--sm" id="f-reset">Réinitialiser</button>
-  <label class="chk"><input type="checkbox" id="f-red"> Complétion &lt; 80 % en rouge</label>
-  <button type="button" class="fr-btn fr-btn--tertiary fr-btn--sm" id="f-csv">Export CSV</button>
-  <button type="button" class="fr-btn fr-btn--tertiary fr-btn--sm" id="f-pdf">Export PDF</button>
   <span id="drill" title="Cliquer pour retirer ce filtre"></span>
-  <span class="count" id="count">Chargement...</span>
+  <div class="rt">
+    <span class="count" id="count">Chargement...</span>
+    <div class="tools">
+      <label class="chk"><input type="checkbox" id="f-red"> Complétion &lt; 80 % en rouge</label>
+      <button type="button" class="lk" id="f-csv">Export CSV</button>
+      <button type="button" class="lk" id="f-pdf">Export PDF</button>
+    </div>
+  </div>
 </div>
 <div id="main"></div>
 
@@ -201,19 +220,66 @@ function bars(title, rows, fn) {
   }
   return h + "</div>";
 }
+var TB = {}, TS = {}, TBN = 0;
+function tstate(k) { if (!TS[k]) { TS[k] = { open: true, all: false, q: "", col: -1, dir: 1 }; } return TS[k]; }
 function tbl(title, rows, cols, limit) {
-  var h = '<div class="box"><h2>' + esc(title) + ' <span class="fr-badge fr-badge--sm fr-badge--info">' + rows.length + '</span></h2><div class="tw"><table><tr>', i, j, n = limit ? Math.min(limit, rows.length) : rows.length;
-  for (j = 0; j < cols.length; j++) { h += "<th>" + esc(cols[j][0]) + "</th>"; }
+  var id = "t" + (TBN++), st = tstate(TAB + "|" + title);
+  TB[id] = { title: title, rows: rows, cols: cols, limit: limit, st: st };
+  return '<div class="box tb" id="' + id + '"><div class="th"><button type="button" class="tbtn" aria-expanded="true" data-a="open" data-t="' + id + '"><span class="chev"></span>' + esc(title) +
+    ' <span class="fr-badge fr-badge--sm fr-badge--info" id="' + id + 'n"></span></button><input type="text" class="tq fr-input" data-t="' + id + '" placeholder="Filtrer cette liste" value="' + esc(st.q) + '"></div><div id="' + id + 'b"></div></div>';
+}
+function sortKey(s) {
+  var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) { return +(m[3] + m[2] + m[1]); }
+  if (/^-?\d+([.,]\d+)?\s*%?$/.test(s)) { return parseFloat(s.replace(",", ".")); }
+  return null;
+}
+function drawTable(id) {
+  var t = TB[id], st = t.st, items = [], i, j, c, q = norm(st.q), h, n, box = document.getElementById(id);
+  box.className = "box tb" + (st.open ? "" : " closed");
+  box.getElementsByTagName("button")[0].setAttribute("aria-expanded", st.open ? "true" : "false");
+  for (i = 0; i < t.rows.length; i++) {
+    c = [];
+    for (j = 0; j < t.cols.length; j++) { c.push(String(t.cols[j][1](t.rows[i]))); }
+    if (q === "" || norm(c.join(" ")).indexOf(q) !== -1) { items.push({ r: t.rows[i], c: c }); }
+  }
+  document.getElementById(id + "n").textContent = items.length === t.rows.length ? t.rows.length : items.length + " / " + t.rows.length;
+  if (st.col >= 0) {
+    items.sort(function (a, b) {
+      var x = a.c[st.col], y = b.c[st.col], kx, ky, r;
+      if (x === y) { return 0; }
+      if (x === "") { return 1; }
+      if (y === "") { return -1; }
+      kx = sortKey(x); ky = sortKey(y);
+      r = (kx !== null && ky !== null) ? kx - ky : x.localeCompare(y, "fr");
+      return r * st.dir;
+    });
+  }
+  if (!st.open) { document.getElementById(id + "b").innerHTML = ""; return; }
+  n = (st.all || !t.limit) ? items.length : Math.min(t.limit, items.length);
+  h = '<div class="tw"><table><tr>';
+  for (j = 0; j < t.cols.length; j++) {
+    h += '<th class="sh" data-a="sort" data-t="' + id + '" data-c="' + j + '">' + esc(t.cols[j][0]) + (st.col === j ? (st.dir === 1 ? " \u25B2" : " \u25BC") : "") + "</th>";
+  }
   h += "</tr>";
   for (i = 0; i < n; i++) {
-    h += (REDON && lowC(rows[i])) ? '<tr class="rd">' : "<tr>";
-    for (j = 0; j < cols.length; j++) { h += "<td>" + esc(cols[j][1](rows[i])) + "</td>"; }
+    h += (REDON && lowC(items[i].r)) ? '<tr class="rd">' : "<tr>";
+    for (j = 0; j < t.cols.length; j++) { h += "<td>" + esc(items[i].c[j]) + "</td>"; }
     h += "</tr>";
   }
-  if (!rows.length) { h += '<tr><td colspan="' + cols.length + '" class="empty">Aucun produit.</td></tr>'; }
+  if (!items.length) { h += '<tr><td colspan="' + t.cols.length + '" class="empty">Aucun produit.</td></tr>'; }
   h += "</table></div>";
-  if (limit && rows.length > limit) { h += '<div class="note">' + limit + " premiers produits affichés sur " + rows.length + ".</div>"; }
-  return h + "</div>";
+  if (t.limit && items.length > t.limit) {
+    h += '<div class="note"><button type="button" class="lk" data-a="all" data-t="' + id + '">' + (st.all ? "Réduire la liste" : "Afficher les " + items.length + " produits (" + t.limit + " affichés)") + "</button></div>";
+  }
+  document.getElementById(id + "b").innerHTML = h;
+}
+function tableAction(n) {
+  var a = n.getAttribute("data-a"), id = n.getAttribute("data-t"), st = TB[id].st, j;
+  if (a === "open") { st.open = !st.open; }
+  if (a === "all") { st.all = !st.all; }
+  if (a === "sort") { j = +n.getAttribute("data-c"); if (st.col === j) { st.dir = -st.dir; } else { st.col = j; st.dir = 1; } }
+  drawTable(id);
 }
 function sel(fn, rows) { var o = [], i; for (i = 0; i < rows.length; i++) { if (fn(rows[i])) { o.push(rows[i]); } } return o; }
 function P(r) { return T(r, COL.produit); }
@@ -276,7 +342,7 @@ var VIEWS = { overview: vOverview, portfolio: vPortfolio, risks: vRisks, modern:
 
 function render() {
   try {
-    DR = [];
+    DR = []; TB = {}; TBN = 0;
     var rows = sel(passF, ALL), i, h = "";
     for (i = 0; i < TABS.length; i++) { h += '<button type="button" class="tb' + (TABS[i][0] === TAB ? " on" : "") + '" data-t="' + TABS[i][0] + '">' + esc(TABS[i][1]) + "</button>"; }
     document.getElementById("tabs").innerHTML = h;
@@ -284,6 +350,7 @@ function render() {
     document.getElementById("drill").innerHTML = DRILL ? '<span class="fr-badge fr-badge--sm fr-badge--blue-ecume">' + esc(DRILL.label) + " \u2715</span>" : "";
     document.getElementById("ptitle").textContent = "Onglet : " + (TABS[0][0] === TAB ? TABS[0][1] : TABS[[0, 1, 2, 3, 4].filter(function (k) { return TABS[k][0] === TAB; })[0]][1]) + " - " + fmtDate(new Date());
     document.getElementById("main").innerHTML = VIEWS[TAB](rows);
+    for (i in TB) { if (TB.hasOwnProperty(i)) { drawTable(i); } }
   } catch (e) { showError(e.message); }
 }
 
@@ -329,6 +396,7 @@ function bind() {
   document.getElementById("main").onclick = function (e) {
     var n = e.target, d;
     while (n && n !== this) {
+      if (n.getAttribute && n.getAttribute("data-a")) { tableAction(n); return; }
       if (n.getAttribute && n.getAttribute("data-d") !== null) {
         d = DR[+n.getAttribute("data-d")];
         if (d) { DRILL = (DRILL !== null && DRILL.label === d.label) ? null : d; render(); }
@@ -336,6 +404,10 @@ function bind() {
       }
       n = n.parentNode;
     }
+  };
+  document.getElementById("main").oninput = function (e) {
+    var n = e.target, id = n.getAttribute("data-t");
+    if (id && TB[id] && String(n.className).indexOf("tq") !== -1) { TB[id].st.q = n.value; drawTable(id); }
   };
   document.getElementById("drill").onclick = function () { DRILL = null; render(); };
   document.getElementById("f-red").onchange = function () { REDON = this.checked; render(); };
