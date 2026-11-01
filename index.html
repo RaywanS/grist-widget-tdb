@@ -94,7 +94,6 @@ svg.psv .act { opacity: .7; }
 .ic:hover { color: #000091; background: #f0f0f0; }
 .ic.on { color: #000091; background: #e3e3fd; cursor: default; }
 .vt { gap: 2px; }
-.pie svg.psv { flex: 1 1 200px; max-width: 340px; min-width: 140px; height: auto; }
 .lgs { flex: 1 1 150px; }
 text.pt { pointer-events: none; text-anchor: middle; dominant-baseline: central; font-weight: 700; stroke: none; }
 .filters input[type="checkbox"] { min-width: 0; width: auto; margin: 0; flex: none; }
@@ -102,6 +101,10 @@ text.pt { pointer-events: none; text-anchor: middle; dominant-baseline: central;
 td.fc, th.fc { text-align: right; width: 1%; }
 .fk { color: #000091; font-size: .8rem; }
 @media print { .fc { display: none !important; } }
+.pw { position: relative; flex: 1 1 200px; max-width: 340px; min-width: 140px; }
+.pw::before { content: ""; display: block; padding-top: 100%; }
+.pw svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+.pl { position: absolute; transform: translate(-50%, -50%); font-size: 12px; font-weight: 700; line-height: 1; white-space: nowrap; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -267,10 +270,10 @@ function pieHtml(keys, counts, tot, title, fn) {
       sv += '<path d="M70 70 L' + x1 + " " + y1 + " A" + R + " " + R + " 0 " + (f > 0.5 ? 1 : 0) + " 1 " + x2 + " " + y2 + ' Z" fill="' + c + '"' + at + ' class="' + act + '"/>';
       ang = a2;
     }
-    tt += '<text class="pt" x="' + (items.length === 1 ? 70 : (70 + 0.62 * R * Math.cos(mid)).toFixed(2)) + '" y="' + (items.length === 1 ? 70 : (70 + 0.62 * R * Math.sin(mid)).toFixed(2)) + '" font-size="7" data-al="' + (f * 2 * Math.PI).toFixed(4) + '" data-mid="' + mid.toFixed(4) + '" fill="' + tcol(c) + '">' + Math.round(f * 100) + "&nbsp;%</text>";
+    tt += '<span class="pl" data-al="' + (f * 2 * Math.PI).toFixed(4) + '" data-mid="' + mid.toFixed(4) + '" style="color:' + tcol(c) + ";left:" + (items.length === 1 ? 50 : 50 + 62 * R / 140 * 100 / 64 * 0.0 + (0.62 * R * Math.cos(mid)) * 100 / 140).toFixed(2) + "%;top:" + (items.length === 1 ? 50 : 50 + (0.62 * R * Math.sin(mid)) * 100 / 140).toFixed(2) + '%">' + Math.round(f * 100) + "&nbsp;%</span>";
     lg += '<div class="lg' + act + '"' + at + '><i style="background:' + c + '"></i><span class="n">' + esc(items[i][0]) + '</span><span class="c">' + items[i][1] + " · " + Math.round(f * 100) + " %</span></div>";
   }
-  return '<div class="pie"><svg class="psv" viewBox="0 0 140 140" role="img" aria-label="' + esc(title) + '">' + sv + tt + '</svg><div class="lgs">' + lg + "</div></div>";
+  return '<div class="pie"><div class="pw"><svg class="psv" viewBox="0 0 140 140" role="img" aria-label="' + esc(title) + '">' + sv + '</svg>' + tt + '</div><div class="lgs">' + lg + "</div></div>";
 }
 var ICO = {
   bar: '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><rect x="1.75" y="8.5" width="3" height="5.75"/><rect x="6.5" y="2.5" width="3" height="11.75"/><rect x="11.25" y="5.5" width="3" height="8.75"/></svg>',
@@ -281,34 +284,35 @@ function vbtn(key, v, mode) {
   return '<button type="button" class="ic' + (mode === v ? " on" : "") + '" data-a="view" data-k="' + esc(key) + '" data-v="' + v + '" aria-pressed="' + (mode === v) + '" aria-label="' + n + '" title="' + n + '">' + ICO[v] + "</button>";
 }
 function tcol(c) { return (c === "#c3992a" || c === "#929292") ? "#161616" : "#ffffff"; }
-// Affiche le % dans un secteur seulement s'il tient réellement (selon la taille affichée du graphique)
+// Les % sont des étiquettes HTML posées sur le graphique (taille réelle en pixels, mesurée dans le navigateur).
+// Une étiquette n'est affichée que si elle tient dans son secteur à la taille actuelle du graphique.
 function fitPies() {
-  var svgs = document.getElementsByClassName("psv"), i, j, k, sv, ts, t, sc, fs, w, al, mid, c, s, rt, ok, x, y, eu, ep, wd, R = 64, cands = [0.68, 0.58, 0.78, 0.48];
-  for (i = 0; i < svgs.length; i++) {
-    sv = svgs[i];
-    sc = sv.getBoundingClientRect().width / 140;
-    if (!(sc > 0)) { continue; }
-    fs = 12 / sc;
-    ts = sv.getElementsByTagName("text");
-    for (j = 0; j < ts.length; j++) {
-      t = ts[j]; al = +t.getAttribute("data-al"); mid = +t.getAttribute("data-mid");
-      t.style.fontSize = fs.toFixed(2) + "px"; t.style.display = "";
-      w = 0;
-      try { w = t.getComputedTextLength(); } catch (e) { w = 0; }
-      if (!w) { w = t.textContent.length * fs * 0.62; }
-      ok = false; x = 70; y = 70;
+  var pws = document.getElementsByClassName("pw"), i, j, k, pw, W, R, labs, lab, al, mid, c, s, w, h, rt, ok, x, y, eu, ep, wd, cands = [0.68, 0.58, 0.78, 0.48];
+  for (i = 0; i < pws.length; i++) {
+    pw = pws[i]; W = pw.offsetWidth;
+    if (!W) { continue; }
+    R = 64 * W / 140;
+    labs = pw.getElementsByClassName("pl");
+    for (j = 0; j < labs.length; j++) {
+      lab = labs[j]; al = +lab.getAttribute("data-al"); mid = +lab.getAttribute("data-mid");
+      w = lab.offsetWidth || 28; h = lab.offsetHeight || 14;
+      ok = false; x = 0; y = 0;
       if (al >= 6.2) { ok = w < R * 1.6; }
       else {
         c = Math.cos(mid); s = Math.sin(mid);
-        eu = w * Math.abs(c) + fs * Math.abs(s);
-        ep = w * Math.abs(s) + fs * Math.abs(c);
+        eu = w * Math.abs(c) + h * Math.abs(s);
+        ep = w * Math.abs(s) + h * Math.abs(c);
         for (k = 0; k < cands.length && !ok; k++) {
           rt = cands[k] * R;
           wd = al >= Math.PI ? 1e9 : 2 * (rt - eu / 2) * Math.tan(al / 2);
-          if (rt + eu / 2 <= R - 1.5 && rt - eu / 2 > 0 && ep + 1 <= wd) { ok = true; x = 70 + rt * c; y = 70 + rt * s; }
+          if (rt + eu / 2 <= R - 2 && rt - eu / 2 > 0 && ep + 2 <= wd) { ok = true; x = rt * c; y = rt * s; }
         }
       }
-      if (ok) { t.setAttribute("x", x.toFixed(2)); t.setAttribute("y", y.toFixed(2)); } else { t.style.display = "none"; }
+      if (ok) {
+        lab.style.left = ((W / 2 + x) * 100 / W).toFixed(2) + "%";
+        lab.style.top = ((W / 2 + y) * 100 / W).toFixed(2) + "%";
+        lab.style.visibility = "visible";
+      } else { lab.style.visibility = "hidden"; }
     }
   }
 }
